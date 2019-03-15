@@ -1,0 +1,12 @@
+[package]
+name = "tbuck"
+version = "1.0.0"
+authors = ["Drake Tetreault <ekardnt@ekardnt.com>"]
+edition = "2018"
+license = "CC0-1.0"
+
+[dependencies]
+chrono = "0.4"
+clap = "2"
+hashbrown = "0.1"
+regex = "1"

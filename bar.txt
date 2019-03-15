@@ -1,0 +1,2 @@
+Hello bar
+2019-03-13 23:35:35,091 line from bar
