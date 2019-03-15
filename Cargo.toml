@@ -4,6 +4,11 @@ version = "1.0.0"
 authors = ["Drake Tetreault <ekardnt@ekardnt.com>"]
 edition = "2018"
 license = "CC0-1.0"
+homepage = "https://github.com/EkardNT/tbuck"
+repository = "https://github.com/EkardNT/tbuck"
+readme = "README.md"
+keywords = ["cli", "timeseries"]
+categories = ["command-line-utilities", "visualization"]
 
 [dependencies]
 chrono = "0.4"
