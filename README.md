@@ -1,5 +1,9 @@
 # tbuck - timeseries bucketing
 
+[![Crates.io](https://img.shields.io/crates/v/tbuck.svg)](https://crates.io/crates/tbuck)
+[![License](https://img.shields.io/crates/l/tbuck.svg)](https://creativecommons.org/share-your-work/public-domain/cc0/)
+[![Last Commit](https://img.shields.io/github/last-commit/EkardNT/tbuck/master.svg)](https://github.com/EkardNT/tbuck/commits/master)
+
 **tbuck** is a simple CLI tool allows you to take lines of text, group them into buckets according to some time granularity, and emit the count of occurrences for each bucket. My motivation for writing it was that I found myself debugging an issue for work where I was trying to find how often a particular event was occurring, identified by a line in an application's log file. The line did not correspond to any metric being emitted into our monitoring system, but I wanted to see a graph of how often the event was occurring. This requirement came up multiple times for multiple different formats of files during the investigation, and I wrote a per-format script for each case. Finally I realized that all the scripts were doing basically the same thing, and wrote tbuck.
 
 ## Usage
