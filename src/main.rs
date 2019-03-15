@@ -96,6 +96,9 @@ fn main() -> IoResult<()> {
 // Defines CLI args. Will terminate program with an error message if args are invalid.
 fn parse_args() -> Args {
     let app_matches = App::new("tbuck")
+        .author(clap::crate_authors!())
+        .version(clap::crate_version!())
+        .about(clap::crate_description!())
         .arg(Arg::with_name("match-index")
             .short("m")
             .long("match-index")
