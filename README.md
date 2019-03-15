@@ -1,6 +1,7 @@
 # tbuck - timeseries bucketing
 
 [![Crates.io](https://img.shields.io/crates/v/tbuck.svg)](https://crates.io/crates/tbuck)
+[![Docs](https://docs.rs/mio/badge.svg)](https://docs.rs/crate/tbuck/)
 [![License](https://img.shields.io/crates/l/tbuck.svg)](https://creativecommons.org/share-your-work/public-domain/cc0/)
 [![Last Commit](https://img.shields.io/github/last-commit/EkardNT/tbuck/master.svg)](https://github.com/EkardNT/tbuck/commits/master)
 
