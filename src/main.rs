@@ -409,9 +409,9 @@ mod datetime_format_tests {
     #[test]
     fn parses() {
         let cases = vec![
-            ("%Y-%m-%d %H:%M:%S", "1991-08-10 01:02:03", 1991, 08, 10, 01, 02, 03),
-            ("%b %d, %Y %I:%M:%S%P", "Mar 14, 2019 04:59:34pm", 2019, 03, 14, 16, 59, 34),
-            ("%s", "1552609482", 2019, 03, 15, 00, 24, 42)
+            ("%Y-%m-%d %H:%M:%S", "1991-08-10 01:02:03", 1991, 8, 10, 1, 2, 3),
+            ("%b %d, %Y %I:%M:%S%P", "Mar 14, 2019 04:59:34pm", 2019, 3, 14, 16, 59, 34),
+            ("%s", "1552609482", 2019, 3, 15, 00, 24, 42)
         ];
         for (strftime, text, y, mo, d, h, mi, s) in cases {
             let format = DateTimeFormat::new(strftime).unwrap();
@@ -520,7 +520,7 @@ mod granularity_tests {
             for input_second in 0..60 {
                 let expected_bucket_second = input_second / granularity_seconds * granularity_seconds;
                 let input = DateTime::from_utc(
-                    NaiveDate::from_ymd(1991, 08, 10).and_hms(10, 30, input_second), Utc {});
+                    NaiveDate::from_ymd(1991, 8, 10).and_hms(10, 30, input_second), Utc {});
                 let bucket = granularity.bucketize(&input);
                 assert!(bucket.time().second() % granularity_seconds == 0);
                 assert_eq!(expected_bucket_second, bucket.time().second());
@@ -532,7 +532,7 @@ mod granularity_tests {
             for input_minute in 0..60 {
                 let expected_bucket_minute = input_minute / granularity_minutes * granularity_minutes;
                 let input = DateTime::from_utc(
-                    NaiveDate::from_ymd(1991, 08, 10).and_hms(10, input_minute, 15), Utc {});
+                    NaiveDate::from_ymd(1991, 8, 10).and_hms(10, input_minute, 15), Utc {});
                 let bucket = granularity.bucketize(&input);
                 assert!(bucket.time().minute() % granularity_minutes == 0);
                 assert_eq!(expected_bucket_minute, bucket.time().minute());
@@ -545,7 +545,7 @@ mod granularity_tests {
             for input_hour in 0..24 {
                 let expected_bucket_hour = input_hour / granularity_hours * granularity_hours;
                 let input = DateTime::from_utc(
-                    NaiveDate::from_ymd(1991, 08, 10).and_hms(input_hour, 43, 15), Utc {});
+                    NaiveDate::from_ymd(1991, 8, 10).and_hms(input_hour, 43, 15), Utc {});
                 let bucket = granularity.bucketize(&input);
                 assert!(bucket.time().hour() % granularity_hours == 0);
                 assert_eq!(expected_bucket_hour, bucket.time().hour());
