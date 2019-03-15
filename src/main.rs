@@ -38,9 +38,14 @@ fn main() -> IoResult<()> {
         // open_bare_read does dynamic dispatch based on the type of input via a `&mut dyn Read` pointer.
         input.open_bare_read(|read| {
             let mut reader = BufReader::new(read);
-            while reader.read_line(&mut line)? > 0 {
+            loop {
                 // Always clear old data.
                 line.clear();
+
+                if reader.read_line(&mut line)? == 0 {
+                    break;
+                }
+
                 // Find the match at the indicated match_index. Ignore lines without a match.
                 let match_ = match regex.find_iter(&line).skip(args.match_index).nth(0) {
                     None => continue,
@@ -73,7 +78,7 @@ fn main() -> IoResult<()> {
     // Write output to stdout.
     let stdout = std::io::stdout();
     let mut stdout_lock = stdout.lock();
-    let mut prev_bucket = args.granularity.successor(&ordered_buckets[ordered_buckets.len() - 1].0);
+    let mut prev_bucket = chrono::MAX_DATE.and_hms(0, 0, 0);
     for (bucket, count) in &ordered_buckets {
         // Unless --no-fill was specified, we need to emit 0s for buckets which don't exist.
         if args.fill_empty_buckets {
