@@ -9,6 +9,7 @@ repository = "https://github.com/EkardNT/tbuck"
 readme = "README.md"
 keywords = ["cli", "timeseries"]
 categories = ["command-line-utilities", "visualization"]
+description = "A command line tool for bucketing time-series text data"
 
 [dependencies]
 chrono = "0.4"
