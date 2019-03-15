@@ -12,7 +12,9 @@
 ## Usage
 
 ```
-tbuck
+tbuck 1.0.1
+Drake Tetreault <ekardnt@ekardnt.com>
+A command line tool for bucketing time-series text data
 
 USAGE:
     tbuck [FLAGS] [OPTIONS] <DATE_TIME_FORMAT> [INPUT_FILE]...

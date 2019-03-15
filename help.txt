@@ -1,0 +1,48 @@
+tbuck 1.0.1
+Drake Tetreault <ekardnt@ekardnt.com>
+A command line tool for bucketing time-series text data
+
+USAGE:
+    tbuck [FLAGS] [OPTIONS] <DATE_TIME_FORMAT> [INPUT_FILE]...
+
+FLAGS:
+    -h, --help       
+            Prints help information
+
+    -n, --no-fill    
+            Disable counts of 0 being emitted for buckets with no entries
+
+    -V, --version    
+            Prints version information
+
+
+OPTIONS:
+    -g, --granularity <GRANULARITY>    
+            Bucket time granularity in seconds ('5s'), minutes ('1m'), or hours ('2h'); default 1m
+
+    -m, --match-index <MATCH_INDEX>    
+            0-based index of match to use if multiple matches are found
+
+
+ARGS:
+    <DATE_TIME_FORMAT>    
+            Date/time parsing format. Full date and time information must be present. The following specifiers are
+            supported, taken from Rust's chrono crate:
+            Specifier   Example     Description
+            %Y          2001        The full proleptic Gregorian year, zero-padded to 4 digits.
+            %m          07          Month number (01--12), zero-padded to 2 digits.
+            %b          Jul         Abbreviated month name. Always 3 letters.
+            %B          July        Full month name. Also accepts corresponding abbreviation in parsing.
+            %d          08          Day number (01--31), zero-padded to 2 digits.
+            %F          2001-07-08  Year-month-day format (ISO 8601). Same to %Y-%m-%d.
+            %H          00          Hour number (00--23), zero-padded to 2 digits.
+            %I          12          Hour number in 12-hour clocks (01--12), zero-padded to 2 digits.
+            %M          34          Minute number (00--59), zero-padded to 2 digits.
+            %S          60          Second number (00--60), zero-padded to 2 digits.
+            %T          00:34:60    Hour-minute-second format. Same to %H:%M:%S.
+            %P          am          am or pm in 12-hour clocks.
+            %p          AM          AM or PM in 12-hour clocks.
+            %s          994518299   UNIX timestamp, the number of seconds since 1970-01-01 00:00 UTC.
+    <INPUT_FILE>...       
+            Input files; or standard input if none provided
+
