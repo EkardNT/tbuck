@@ -30,8 +30,8 @@ fn main() -> IoResult<()> {
     // Compile the regex only once.
     let regex = args.datetime_format.regex();
 
-    // Unordered buckets - will be ordered after all lines have been counted.
-    let mut buckets: HashMap<DateTime<Utc>, u64> = HashMap::new();
+    // Initialize mode-based logic.
+    let mut runner = Runner::from_mode(args.mode);
 
     // TODO: parallelize reading across inputs? Probably not super helpful.
     for input in &args.inputs {
@@ -51,6 +51,7 @@ fn main() -> IoResult<()> {
                     None => continue,
                     Some(m) => m,
                 };
+
                 // Convert the match into a DateTime<Utc>. Because the regex is more permissive than
                 // the chrono library (for example, a value of '61' seconds will pass the regex but
                 // not chrono's range checking), its possible the parsing may fail. This is more
@@ -63,34 +64,16 @@ fn main() -> IoResult<()> {
                         continue;
                     }
                 };
+
                 // Increment bucket count.
                 let bucket = args.granularity.bucketize(&datetime);
-                *buckets.entry(bucket).or_insert(0) += 1;
+                runner.handle_bucket_entry(bucket, &args);
             }
             Ok(())
         })?;
     }
 
-    // Sort buckets by time.
-    let mut ordered_buckets: Vec<(DateTime<Utc>, u64)> = buckets.into_iter().collect();
-    ordered_buckets.sort_unstable_by(|l, r| l.0.cmp(&r.0));
-
-    // Write output to stdout.
-    let stdout = std::io::stdout();
-    let mut stdout_lock = stdout.lock();
-    let mut prev_bucket = chrono::MAX_DATE.and_hms(0, 0, 0);
-    for (bucket, count) in &ordered_buckets {
-        // Unless --no-fill was specified, we need to emit 0s for buckets which don't exist.
-        if args.fill_empty_buckets {
-            while prev_bucket < *bucket {
-                writeln!(stdout_lock, "{},0", prev_bucket)?;
-                prev_bucket = args.granularity.successor(&prev_bucket);
-            }
-        }
-        writeln!(stdout_lock, "{},{}", bucket, count)?;
-        prev_bucket = args.granularity.successor(bucket);
-    }
-    Ok(())
+    runner.finish(&args)
 }
 
 // Defines CLI args. Will terminate program with an error message if args are invalid.
@@ -104,6 +87,7 @@ fn parse_args() -> Args {
             .long("match-index")
             .takes_value(true)
             .value_name("MATCH_INDEX")
+            .default_value("0")
             .help("0-based index of match to use if multiple matches are found")
             .validator(|value| {
                 value.parse::<usize>()
@@ -115,7 +99,8 @@ fn parse_args() -> Args {
             .long("granularity")
             .takes_value(true)
             .value_name("GRANULARITY")
-            .help("Bucket time granularity in seconds ('5s'), minutes ('1m'), or hours ('2h'); default 1m")
+            .default_value("1m")
+            .help("Bucket time granularity in seconds ('5s'), minutes ('1m'), or hours ('2h')")
             .validator(|value| {
                 Granularity::parse(&value)
                     .map(|_| ())
@@ -124,7 +109,24 @@ fn parse_args() -> Args {
         .arg(Arg::with_name("no-fill")
             .short("n")
             .long("no-fill")
-            .help("Disable counts of 0 being emitted for buckets with no entries"))
+            .help("Disable counts of 0 being emitted for buckets with no entries")
+            .long_help("By default buckets which had no entries present will be displayed with a count of 0. If this flag is present then instead the bucket will not be printed at all."))
+        .arg(Arg::with_name("stream")
+            .short("s")
+            .long("stream")
+            .help("Enable stream mode")
+            .long_help("Enable stream mode. Entries will be expected to arrive in monotonically increasing (or --decreasing) order, and bucket information will be printed live as soon as the bucket is known to be finished. By default the presence of any entry violating the monotonic order will cause an error, but this can be made --tolerant."))
+        .arg(Arg::with_name("descending")
+            .short("d")
+            .long("descending")
+            .help("Set expected stream order to descending, or prints buckets in descending order in normal mode")
+            .long_help("By default stream mode expects entries to be in monotonically ascending order by date (earlier dates followed by later dates), which is the usual order of log files. If this flag is present then stream mode will instead expect entries in monotonically decreasing order by date (later dates followed by earlier dates). In normal mode, this flag will cause the buckets to be printed in descending order instead of the default ascending order."))
+        .arg(Arg::with_name("tolerant")
+            .short("t")
+            .long("tolerant")
+            .requires("stream")
+            .help("Make stream mode silently discard non-monotonic entries instead of erroring")
+            .long_help("By default when a non-monotonic entry is encountered in stream mode the program will terminate with an error. If this flag is present then non-monotonic entries will instead be silently discarded."))
         .arg(Arg::with_name("format")
             .required(true)
             .takes_value(true)
@@ -171,14 +173,11 @@ Specifier   Example     Description
             .expect("format is a required argument"),
     )
     .expect("validator should have rejected unsupported items");
-    let match_index = app_matches.value_of("match-index").map_or(0, |val| {
-        val.parse::<usize>()
-            .expect("validator should have rejected invalid values")
-    });
-    let granularity = app_matches.value_of("granularity").map_or_else(
-        || Granularity::Minute(NonZeroU32::new(1).unwrap()),
-        |val| Granularity::parse(val).expect("validator should have rejected invalid values"),
-    );
+    let match_index = app_matches.value_of("match-index").expect("match-index has default value")
+        .parse::<usize>()
+        .expect("validator should have rejected invalid values");
+    let granularity = Granularity::parse(app_matches.value_of("granularity").expect("granularity has default value"))
+        .expect("validator should have rejected invalid values");
     let inputs = app_matches.values_of_os("inputs").map_or_else(
         || vec![Input::Stdin {}],
         |vals| {
@@ -187,6 +186,9 @@ Specifier   Example     Description
         },
     );
     let fill_empty_buckets = !app_matches.is_present("no-fill");
+    let tolerant = app_matches.is_present("tolerant");
+    let order = if app_matches.is_present("descending") { DateTimeOrder::Descending } else { DateTimeOrder::Ascending };
+    let mode = if app_matches.is_present("stream") { Mode::Stream } else { Mode::Normal };
 
     Args {
         datetime_format,
@@ -194,6 +196,9 @@ Specifier   Example     Description
         granularity,
         inputs,
         fill_empty_buckets,
+        mode,
+        order,
+        tolerant,
     }
 }
 
@@ -205,6 +210,89 @@ struct Args {
     granularity: Granularity,
     inputs: Vec<Input>,
     fill_empty_buckets: bool,
+    mode: Mode,
+    order: DateTimeOrder,
+    tolerant: bool
+}
+
+#[derive(Debug, Copy, Clone)]
+enum Mode {
+    Normal,
+    Stream
+}
+
+// Mode-based runner. Contains business logic for normal and streaming modes.
+enum Runner {
+    // Normal mode will put everything into buckets and print them all at the end.
+    Normal {
+        // Unordered buckets - will be ordered after all lines have been counted.
+        buckets: HashMap<DateTime<Utc>, u64>
+    },
+    Stream {
+
+    }
+}
+
+impl Runner {
+    fn from_mode(mode: Mode) -> Self {
+        match mode {
+            Mode::Normal => Runner::Normal {
+                buckets: HashMap::with_capacity(1024)
+            },
+            Mode::Stream => Runner::Stream {
+
+            }
+        }
+    }
+
+    fn handle_bucket_entry(&mut self, entry: DateTime<Utc>, args: &Args) {
+        match self {
+            Runner::Normal { buckets } => {
+                *buckets.entry(entry).or_insert(0) += 1;
+            },
+            Runner::Stream { } => {
+                unimplemented!();
+            }
+        }
+    }
+
+    fn finish(self, args: &Args) -> IoResult<()> {
+        match self {
+            Runner::Normal { buckets } => {
+                // Sort buckets by time.
+                let mut ordered_buckets: Vec<(DateTime<Utc>, u64)> = buckets.into_iter().collect();
+                ordered_buckets.sort_unstable_by(|l, r| l.0.cmp(&r.0));
+
+                // Write output to stdout.
+                let stdout = std::io::stdout();
+                let mut stdout_lock = stdout.lock();
+                let mut prev_bucket = chrono::MAX_DATE.and_hms(0, 0, 0);
+                for (bucket, count) in &ordered_buckets {
+                    // Unless --no-fill was specified, we need to emit 0s for buckets which don't exist.
+                    if args.fill_empty_buckets {
+                        while prev_bucket < *bucket {
+                            writeln!(stdout_lock, "{},0", prev_bucket)?;
+                            prev_bucket = args.granularity.successor(&prev_bucket);
+                        }
+                    }
+                    writeln!(stdout_lock, "{},{}", bucket, count)?;
+                    prev_bucket = args.granularity.successor(bucket);
+                }
+                Ok(())
+            },
+            Runner::Stream { } => {
+                unimplemented!();
+            }
+        }
+    }
+}
+
+// The order that datetime entries are expected in stream mode OR the order that buckets
+// will be printed in normal mode.
+#[derive(Debug)]
+enum DateTimeOrder {
+    Ascending,
+    Descending
 }
 
 // Where the program can take its input from.
