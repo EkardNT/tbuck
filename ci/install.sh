@@ -44,6 +44,7 @@ main() {
            --target $target
 
     rustup component add clippy
+    rustup component add rustfmt
 }
 
 main
