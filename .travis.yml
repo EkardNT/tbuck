@@ -8,12 +8,15 @@ sudo: required
 
 # DONE Rust builds on stable by default, this can be
 # overridden on a case by case basis down below.
+rust: stable
 
 env:
   global:
     - CRATE_NAME=tbuck
 
 matrix:
+  allow_failures:
+    - rust: nightly
   # DONE These are all the build jobs. Adjust as necessary. Comment out what you
   # don't need
   include:
