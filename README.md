@@ -20,22 +20,35 @@ USAGE:
     tbuck [FLAGS] [OPTIONS] <DATE_TIME_FORMAT> [INPUT_FILE]...
 
 FLAGS:
+    -d, --descending
+            By default stream mode expects entries to be in monotonically ascending order by date (earlier dates
+            followed by later dates), which is the usual order of log files. If this flag is present then stream mode
+            will instead expect entries in monotonically decreasing order by date (later dates followed by earlier
+            dates). In normal mode, this flag will cause the buckets to be printed in descending order instead of the
+            default ascending order.
     -h, --help
             Prints help information
 
     -n, --no-fill
-            Disable counts of 0 being emitted for buckets with no entries
-
+            By default buckets which had no entries present will be displayed with a count of 0. If this flag is present
+            then instead the bucket will not be printed at all.
+    -s, --stream
+            Enable stream mode. Entries will be expected to arrive in monotonically increasing (or --decreasing) order,
+            and bucket information will be printed live as soon as the bucket is known to be finished. By default the
+            presence of any entry violating the monotonic order will cause an error, but this can be made --tolerant.
+    -t, --tolerant
+            By default when a non-monotonic entry is encountered in stream mode the program will terminate with an
+            error. If this flag is present then non-monotonic entries will instead be silently discarded.
     -V, --version
             Prints version information
 
 
 OPTIONS:
     -g, --granularity <GRANULARITY>
-            Bucket time granularity in seconds ('5s'), minutes ('1m'), or hours ('2h'); default 1m
+            Bucket time granularity in seconds ('5s'), minutes ('1m'), or hours ('2h') [default: 1m]
 
     -m, --match-index <MATCH_INDEX>
-            0-based index of match to use if multiple matches are found
+            0-based index of match to use if multiple matches are found [default: 0]
 
 
 ARGS:

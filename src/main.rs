@@ -10,6 +10,7 @@
 #![deny(clippy::all)]
 #![deny(clippy::pedantic)]
 
+use std::cmp::Ordering;
 use std::io::{BufRead, BufReader, Read, Result as IoResult, Write};
 use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
@@ -67,7 +68,7 @@ fn main() -> IoResult<()> {
 
                 // Increment bucket count.
                 let bucket = args.granularity.bucketize(&datetime);
-                runner.handle_bucket_entry(bucket, &args);
+                runner.handle_bucket_entry(bucket, &args)?;
             }
             Ok(())
         })?;
@@ -229,7 +230,8 @@ enum Runner {
         buckets: HashMap<DateTime<Utc>, u64>
     },
     Stream {
-
+        count: u64,
+        bucket: Option<DateTime<Utc>>
     }
 }
 
@@ -240,18 +242,60 @@ impl Runner {
                 buckets: HashMap::with_capacity(1024)
             },
             Mode::Stream => Runner::Stream {
-
+                count: 0,
+                bucket: None
             }
         }
     }
 
-    fn handle_bucket_entry(&mut self, entry: DateTime<Utc>, args: &Args) {
+    fn handle_bucket_entry(&mut self, entry: DateTime<Utc>, args: &Args) -> IoResult<()> {
         match self {
             Runner::Normal { buckets } => {
                 *buckets.entry(entry).or_insert(0) += 1;
+                Ok(())
             },
-            Runner::Stream { } => {
-                unimplemented!();
+            Runner::Stream { count, bucket } => {
+                let current_bucket = match bucket {
+                    Some(b) => b,
+                    None => {
+                        // If this is the first bucket, just record the entry and return.
+                        *bucket = Some(entry);
+                        *count = 1;
+                        return Ok(());
+                    }
+                };
+                // What to do next depends on both what ordering the user configured and what the actual relation between the
+                // current bucket and new entry is.
+                match (args.order, entry.cmp(current_bucket)) {
+                    (_, Ordering::Equal) => {
+                        // Same bucket. Just increment the count.
+                        *count += 1;
+                    },
+                    (DateTimeOrder::Ascending, Ordering::Less) | (DateTimeOrder::Descending, Ordering::Greater) => {
+                        // Non-monotonic according to configured ordering.
+                        if !args.tolerant {
+                            // TODO: better error propagation.
+                            panic!("Non monotonic entry found");
+                        }
+                    },
+                    (DateTimeOrder::Ascending, Ordering::Greater) | (DateTimeOrder::Descending, Ordering::Less) => {
+                        // Monotonic. Print bucket(s) and advance to the next. We may be printing multiple buckets at
+                        // once so lock stdout.
+                        let stdout = std::io::stdout();
+                        let mut stdout_lock = stdout.lock();
+                        writeln!(stdout_lock, "{},{}", current_bucket, count)?;
+                        if args.fill_empty_buckets {
+                            let mut next_bucket = args.granularity.successor(current_bucket);
+                            while next_bucket < entry {
+                                writeln!(stdout_lock, "{},0", next_bucket)?;
+                                next_bucket = args.granularity.successor(&next_bucket);
+                            }
+                        }
+                        *count = 1;
+                        *bucket = Some(entry)
+                    },
+                }
+                Ok(())
             }
         }
     }
@@ -278,18 +322,21 @@ impl Runner {
                     writeln!(stdout_lock, "{},{}", bucket, count)?;
                     prev_bucket = args.granularity.successor(bucket);
                 }
-                Ok(())
             },
-            Runner::Stream { } => {
-                unimplemented!();
+            Runner::Stream { count, bucket } => {
+                if let Some(bucket) = bucket {
+                    // Don't bother locking stdout for a single write.
+                    println!("{},{}", bucket, count);
+                }
             }
-        }
+        };
+        Ok(())
     }
 }
 
 // The order that datetime entries are expected in stream mode OR the order that buckets
 // will be printed in normal mode.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 enum DateTimeOrder {
     Ascending,
     Descending
