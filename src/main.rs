@@ -10,13 +10,13 @@
 #![deny(clippy::all)]
 #![deny(clippy::pedantic)]
 
-use std::io::{Read, BufRead, BufReader, Write, Result as IoResult};
+use std::io::{BufRead, BufReader, Read, Result as IoResult, Write};
 use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, Timelike, Utc, Duration};
-use chrono::format::{Item, Numeric, Pad, Fixed, Parsed};
 use chrono::format::strftime::StrftimeItems;
+use chrono::format::{Fixed, Item, Numeric, Pad, Parsed};
+use chrono::{DateTime, Duration, Timelike, Utc};
 use clap::{App, Arg};
 use hashbrown::HashMap;
 use regex::Regex;
@@ -49,7 +49,7 @@ fn main() -> IoResult<()> {
                 // Find the match at the indicated match_index. Ignore lines without a match.
                 let match_ = match regex.find_iter(&line).skip(args.match_index).nth(0) {
                     None => continue,
-                    Some(m) => m
+                    Some(m) => m,
                 };
                 // Convert the match into a DateTime<Utc>. Because the regex is more permissive than
                 // the chrono library (for example, a value of '61' seconds will pass the regex but
@@ -60,7 +60,7 @@ fn main() -> IoResult<()> {
                     Ok(p) => p,
                     Err(err) => {
                         eprintln!("Failed to parse date/time match: {}", err);
-                        continue
+                        continue;
                     }
                 };
                 // Increment bucket count.
@@ -165,19 +165,27 @@ Specifier   Example     Description
             .help("Input files; or standard input if none provided"))
         .get_matches();
 
-    let datetime_format = DateTimeFormat::new(app_matches.value_of("format")
-        .expect("format is a required argument"))
-        .expect("validator should have rejected unsupported items");
-    let match_index = app_matches.value_of("match-index")
-        .map_or(0, |val| val.parse::<usize>().expect("validator should have rejected invalid values"));
-    let granularity = app_matches.value_of("granularity")
-        .map_or_else(
-            || Granularity::Minute(NonZeroU32::new(1).unwrap()),
-            |val| Granularity::parse(val).expect("validator should have rejected invalid values"));
-    let inputs = app_matches.values_of_os("inputs")
-        .map_or_else(
-            || vec![Input::Stdin {}],
-            |vals| vals.map(|val| Input::File(Path::new(val).to_path_buf())).collect());
+    let datetime_format = DateTimeFormat::new(
+        app_matches
+            .value_of("format")
+            .expect("format is a required argument"),
+    )
+    .expect("validator should have rejected unsupported items");
+    let match_index = app_matches.value_of("match-index").map_or(0, |val| {
+        val.parse::<usize>()
+            .expect("validator should have rejected invalid values")
+    });
+    let granularity = app_matches.value_of("granularity").map_or_else(
+        || Granularity::Minute(NonZeroU32::new(1).unwrap()),
+        |val| Granularity::parse(val).expect("validator should have rejected invalid values"),
+    );
+    let inputs = app_matches.values_of_os("inputs").map_or_else(
+        || vec![Input::Stdin {}],
+        |vals| {
+            vals.map(|val| Input::File(Path::new(val).to_path_buf()))
+                .collect()
+        },
+    );
     let fill_empty_buckets = !app_matches.is_present("no-fill");
 
     Args {
@@ -185,7 +193,7 @@ Specifier   Example     Description
         match_index,
         granularity,
         inputs,
-        fill_empty_buckets
+        fill_empty_buckets,
     }
 }
 
@@ -196,14 +204,14 @@ struct Args {
     match_index: usize,
     granularity: Granularity,
     inputs: Vec<Input>,
-    fill_empty_buckets: bool
+    fill_empty_buckets: bool,
 }
 
 // Where the program can take its input from.
 #[derive(Debug)]
 enum Input {
     Stdin,
-    File(PathBuf)
+    File(PathBuf),
 }
 
 impl Input {
@@ -216,7 +224,7 @@ impl Input {
                 let stdin = std::io::stdin();
                 let mut lock = stdin.lock();
                 f(&mut lock)
-            },
+            }
             Input::File(path) => {
                 let mut file = std::fs::File::open(path)?;
                 f(&mut file)
@@ -228,7 +236,7 @@ impl Input {
 // Will be used both for finding timestamps within a line and parsing the timestamp into a datetime.
 #[derive(Debug)]
 struct DateTimeFormat {
-    chrono_items: Vec<FormatItem>
+    chrono_items: Vec<FormatItem>,
 }
 
 impl DateTimeFormat {
@@ -238,17 +246,19 @@ impl DateTimeFormat {
     fn new(format_string: &str) -> Option<Self> {
         let mut items_supported = true;
         let chrono_items: Vec<FormatItem> = StrftimeItems::new(format_string)
-            .inspect(|item| items_supported &= match item {
-                Item::Numeric(numeric, pad) => numeric_format_to_regex_fragment(numeric, *pad).is_some(),
-                Item::Fixed(fixed) => fixed_format_to_regex_fragment(fixed).is_some(),
-                _ => true
+            .inspect(|item| {
+                items_supported &= match item {
+                    Item::Numeric(numeric, pad) => {
+                        numeric_format_to_regex_fragment(numeric, *pad).is_some()
+                    }
+                    Item::Fixed(fixed) => fixed_format_to_regex_fragment(fixed).is_some(),
+                    _ => true,
+                }
             })
             .map(FormatItem::from_chrono)
             .collect();
         if items_supported {
-            Some(Self {
-                chrono_items
-            })
+            Some(Self { chrono_items })
         } else {
             None
         }
@@ -262,14 +272,18 @@ impl DateTimeFormat {
                 FormatItem::Literal(string) | FormatItem::Space(string) => {
                     // Remember to escape special characters.
                     expression.push_str(&regex::escape(string));
-                },
+                }
                 FormatItem::Numeric(numeric, pad) => {
-                    expression.push_str(numeric_format_to_regex_fragment(numeric, *pad)
-                        .expect("validator should have rejected unsupported items"));
-                },
+                    expression.push_str(
+                        numeric_format_to_regex_fragment(numeric, *pad)
+                            .expect("validator should have rejected unsupported items"),
+                    );
+                }
                 FormatItem::Fixed(fixed) => {
-                    expression.push_str(fixed_format_to_regex_fragment(fixed)
-                        .expect("validator should have rejected unsupported items"));
+                    expression.push_str(
+                        fixed_format_to_regex_fragment(fixed)
+                            .expect("validator should have rejected unsupported items"),
+                    );
                 }
             }
         }
@@ -288,7 +302,11 @@ impl DateTimeFormat {
     // 'full' DateTimes - just accept 0s for missing components?
     fn try_parse(&self, text: &str) -> chrono::format::ParseResult<DateTime<Utc>> {
         let mut parsed = Parsed::new();
-        chrono::format::parse(&mut parsed, text, self.chrono_items.iter().map(FormatItem::to_chrono))?;
+        chrono::format::parse(
+            &mut parsed,
+            text,
+            self.chrono_items.iter().map(FormatItem::to_chrono),
+        )?;
         parsed.to_datetime_with_timezone(&Utc {})
     }
 
@@ -301,14 +319,18 @@ impl DateTimeFormat {
             match item {
                 FormatItem::Literal(string) | FormatItem::Space(string) => {
                     default_values.push_str(string);
-                },
+                }
                 FormatItem::Numeric(numeric, pad) => {
-                    default_values.push_str(numeric_format_to_default_value(numeric, *pad)
-                        .expect("validator should have rejected unsupported items"));
-                },
+                    default_values.push_str(
+                        numeric_format_to_default_value(numeric, *pad)
+                            .expect("validator should have rejected unsupported items"),
+                    );
+                }
                 FormatItem::Fixed(fixed) => {
-                    default_values.push_str(fixed_format_to_default_value(fixed)
-                        .expect("validator should have rejected unsupported items"));
+                    default_values.push_str(
+                        fixed_format_to_default_value(fixed)
+                            .expect("validator should have rejected unsupported items"),
+                    );
                 }
             }
         }
@@ -324,7 +346,7 @@ fn numeric_format_to_regex_fragment(numeric: &Numeric, _pad: Pad) -> Option<&'st
         Year => "-?\\d+",
         Month | Day | Hour | Hour12 | Minute | Second => "\\d{2}",
         Timestamp => "\\d+",
-        _ => return None
+        _ => return None,
     })
 }
 
@@ -336,7 +358,7 @@ fn numeric_format_to_default_value(numeric: &Numeric, _pad: Pad) -> Option<&'sta
         Month | Day | Hour12 => "01",
         Hour | Minute | Second => "00",
         Timestamp => "000000000",
-        _ => return None
+        _ => return None,
     })
 }
 
@@ -360,22 +382,49 @@ fn fixed_format_to_default_value(fixed: &Fixed) -> Option<&'static str> {
         LongMonthName => "January",
         LowerAmPm => "am",
         UpperAmPm => "AM",
-        _ => return None
+        _ => return None,
     })
 }
 
 #[cfg(test)]
 mod datetime_format_tests {
-    use chrono::{Datelike, Timelike};
     use super::DateTimeFormat;
+    use chrono::{Datelike, Timelike};
 
     #[test]
     fn formats_are_matched() {
         let cases = vec![
             ("%Y", vec!["2019", "1", "0100", "100", "-1"]),
-            ("%m", vec!["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]),
-            ("%b", vec!["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]),
-            ("%B", vec!["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]),
+            (
+                "%m",
+                vec![
+                    "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12",
+                ],
+            ),
+            (
+                "%b",
+                vec![
+                    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov",
+                    "Dec",
+                ],
+            ),
+            (
+                "%B",
+                vec![
+                    "January",
+                    "February",
+                    "March",
+                    "April",
+                    "May",
+                    "June",
+                    "July",
+                    "August",
+                    "September",
+                    "October",
+                    "November",
+                    "December",
+                ],
+            ),
             ("%d", vec!["01", "02", "10", "22", "31"]),
             ("%F", vec!["1991-08-10", "2019-03-14"]),
             ("%H", vec!["00", "02", "10", "19", "23"]),
@@ -398,11 +447,7 @@ mod datetime_format_tests {
 
     #[test]
     fn has_enough_info() {
-        let cases = vec![
-            "%Y-%m-%d %H:%M:%S",
-            "%F %T",
-            "%b %d, %Y %I:%M %p"
-        ];
+        let cases = vec!["%Y-%m-%d %H:%M:%S", "%F %T", "%b %d, %Y %I:%M %p"];
         for strftime in &cases {
             let format = DateTimeFormat::new(strftime).unwrap();
             assert!(format.has_enough_info());
@@ -412,9 +457,27 @@ mod datetime_format_tests {
     #[test]
     fn parses() {
         let cases = vec![
-            ("%Y-%m-%d %H:%M:%S", "1991-08-10 01:02:03", 1991, 8, 10, 1, 2, 3),
-            ("%b %d, %Y %I:%M:%S%P", "Mar 14, 2019 04:59:34pm", 2019, 3, 14, 16, 59, 34),
-            ("%s", "1552609482", 2019, 3, 15, 00, 24, 42)
+            (
+                "%Y-%m-%d %H:%M:%S",
+                "1991-08-10 01:02:03",
+                1991,
+                8,
+                10,
+                1,
+                2,
+                3,
+            ),
+            (
+                "%b %d, %Y %I:%M:%S%P",
+                "Mar 14, 2019 04:59:34pm",
+                2019,
+                3,
+                14,
+                16,
+                59,
+                34,
+            ),
+            ("%s", "1552609482", 2019, 3, 15, 00, 24, 42),
         ];
         for (strftime, text, y, mo, d, h, mi, s) in cases {
             let format = DateTimeFormat::new(strftime).unwrap();
@@ -441,11 +504,26 @@ enum Granularity {
 impl Granularity {
     fn parse(text: &str) -> Option<Self> {
         if let Some(index) = text.find('s') {
-            text.split_at(index).0.parse::<u32>().ok().and_then(NonZeroU32::new).map(Granularity::Second)
+            text.split_at(index)
+                .0
+                .parse::<u32>()
+                .ok()
+                .and_then(NonZeroU32::new)
+                .map(Granularity::Second)
         } else if let Some(index) = text.find('m') {
-            text.split_at(index).0.parse::<u32>().ok().and_then(NonZeroU32::new).map(Granularity::Minute)
+            text.split_at(index)
+                .0
+                .parse::<u32>()
+                .ok()
+                .and_then(NonZeroU32::new)
+                .map(Granularity::Minute)
         } else if let Some(index) = text.find('h') {
-            text.split_at(index).0.parse::<u32>().ok().and_then(NonZeroU32::new).map(Granularity::Hour)
+            text.split_at(index)
+                .0
+                .parse::<u32>()
+                .ok()
+                .and_then(NonZeroU32::new)
+                .map(Granularity::Hour)
         } else {
             None
         }
@@ -456,32 +534,30 @@ impl Granularity {
             Granularity::Second(s) => {
                 let s = s.get();
                 let time = datetime.time();
-                datetime.date().and_hms(time.hour(), time.minute(), time.second() / s * s)
-            },
+                datetime
+                    .date()
+                    .and_hms(time.hour(), time.minute(), time.second() / s * s)
+            }
             Granularity::Minute(m) => {
                 let m = m.get();
                 let time = datetime.time();
-                datetime.date().and_hms(time.hour(), time.minute() / m * m, 0)
-            },
+                datetime
+                    .date()
+                    .and_hms(time.hour(), time.minute() / m * m, 0)
+            }
             Granularity::Hour(h) => {
                 let h = h.get();
                 let time = datetime.time();
                 datetime.date().and_hms(time.hour() / h * h, 0, 0)
-            },
+            }
         }
     }
 
     fn successor(&self, datetime: &DateTime<Utc>) -> DateTime<Utc> {
         match self {
-            Granularity::Second(s) => {
-                *datetime + Duration::seconds(i64::from(s.get()))
-            },
-            Granularity::Minute(m) => {
-                *datetime + Duration::minutes(i64::from(m.get()))
-            },
-            Granularity::Hour(h) => {
-                *datetime + Duration::hours(i64::from(h.get()))
-            }
+            Granularity::Second(s) => *datetime + Duration::seconds(i64::from(s.get())),
+            Granularity::Minute(m) => *datetime + Duration::minutes(i64::from(m.get())),
+            Granularity::Hour(h) => *datetime + Duration::hours(i64::from(h.get())),
         }
     }
 }
@@ -489,9 +565,9 @@ impl Granularity {
 #[cfg(test)]
 mod granularity_tests {
     use super::Granularity;
-    use std::num::NonZeroU32;
-    use chrono::{DateTime, Utc, Timelike};
     use chrono::naive::NaiveDate;
+    use chrono::{DateTime, Timelike, Utc};
+    use std::num::NonZeroU32;
 
     #[test]
     fn parses() {
@@ -521,9 +597,12 @@ mod granularity_tests {
         for granularity_seconds in 1..100 {
             let granularity = Granularity::Second(NonZeroU32::new(granularity_seconds).unwrap());
             for input_second in 0..60 {
-                let expected_bucket_second = input_second / granularity_seconds * granularity_seconds;
+                let expected_bucket_second =
+                    input_second / granularity_seconds * granularity_seconds;
                 let input = DateTime::from_utc(
-                    NaiveDate::from_ymd(1991, 8, 10).and_hms(10, 30, input_second), Utc {});
+                    NaiveDate::from_ymd(1991, 8, 10).and_hms(10, 30, input_second),
+                    Utc {},
+                );
                 let bucket = granularity.bucketize(&input);
                 assert!(bucket.time().second() % granularity_seconds == 0);
                 assert_eq!(expected_bucket_second, bucket.time().second());
@@ -533,9 +612,12 @@ mod granularity_tests {
         for granularity_minutes in 1..100 {
             let granularity = Granularity::Minute(NonZeroU32::new(granularity_minutes).unwrap());
             for input_minute in 0..60 {
-                let expected_bucket_minute = input_minute / granularity_minutes * granularity_minutes;
+                let expected_bucket_minute =
+                    input_minute / granularity_minutes * granularity_minutes;
                 let input = DateTime::from_utc(
-                    NaiveDate::from_ymd(1991, 8, 10).and_hms(10, input_minute, 15), Utc {});
+                    NaiveDate::from_ymd(1991, 8, 10).and_hms(10, input_minute, 15),
+                    Utc {},
+                );
                 let bucket = granularity.bucketize(&input);
                 assert!(bucket.time().minute() % granularity_minutes == 0);
                 assert_eq!(expected_bucket_minute, bucket.time().minute());
@@ -548,7 +630,9 @@ mod granularity_tests {
             for input_hour in 0..24 {
                 let expected_bucket_hour = input_hour / granularity_hours * granularity_hours;
                 let input = DateTime::from_utc(
-                    NaiveDate::from_ymd(1991, 8, 10).and_hms(input_hour, 43, 15), Utc {});
+                    NaiveDate::from_ymd(1991, 8, 10).and_hms(input_hour, 43, 15),
+                    Utc {},
+                );
                 let bucket = granularity.bucketize(&input);
                 assert!(bucket.time().hour() % granularity_hours == 0);
                 assert_eq!(expected_bucket_hour, bucket.time().hour());
@@ -579,7 +663,7 @@ impl FormatItem {
             OwnedSpace(box_str) => FormatItem::Space(box_str.to_string()),
             Numeric(numeric, pad) => FormatItem::Numeric(numeric, pad),
             Fixed(fixed) => FormatItem::Fixed(fixed),
-            Error => unimplemented!()
+            Error => unimplemented!(),
         }
     }
 
