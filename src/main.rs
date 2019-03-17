@@ -305,7 +305,10 @@ impl Runner {
             Runner::Normal { buckets } => {
                 // Sort buckets by time.
                 let mut ordered_buckets: Vec<(DateTime<Utc>, u64)> = buckets.into_iter().collect();
-                ordered_buckets.sort_unstable_by(|l, r| l.0.cmp(&r.0));
+                match args.order {
+                    DateTimeOrder::Ascending => ordered_buckets.sort_unstable_by(|l, r| l.0.cmp(&r.0)),
+                    DateTimeOrder::Descending => ordered_buckets.sort_unstable_by(|l, r| r.0.cmp(&l.0))
+                };
 
                 // Write output to stdout.
                 let stdout = std::io::stdout();
