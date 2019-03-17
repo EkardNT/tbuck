@@ -12,7 +12,7 @@
 ## Usage
 
 ```
-tbuck 1.0.4
+tbuck 1.1.0
 Drake Tetreault <ekardnt@ekardnt.com>
 A command line tool for bucketing time-series text data
 
