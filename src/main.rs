@@ -168,28 +168,35 @@ Specifier   Example     Description
             .help("Input files; or standard input if none provided"))
         .get_matches();
 
-    let datetime_format = DateTimeFormat::new(
-        app_matches
-            .value_of("format")
-            .expect("format is a required argument"),
-    )
-    .expect("validator should have rejected unsupported items");
-    let match_index = app_matches.value_of("match-index").expect("match-index has default value")
+    let datetime_format = DateTimeFormat::new(app_matches.value_of("format").expect("format is a required argument"))
+        .expect("validator should have rejected unsupported items");
+    let match_index = app_matches
+        .value_of("match-index")
+        .expect("match-index has default value")
         .parse::<usize>()
         .expect("validator should have rejected invalid values");
-    let granularity = Granularity::parse(app_matches.value_of("granularity").expect("granularity has default value"))
-        .expect("validator should have rejected invalid values");
+    let granularity = Granularity::parse(
+        app_matches
+            .value_of("granularity")
+            .expect("granularity has default value"),
+    )
+    .expect("validator should have rejected invalid values");
     let inputs = app_matches.values_of_os("inputs").map_or_else(
         || vec![Input::Stdin {}],
-        |vals| {
-            vals.map(|val| Input::File(Path::new(val).to_path_buf()))
-                .collect()
-        },
+        |vals| vals.map(|val| Input::File(Path::new(val).to_path_buf())).collect(),
     );
     let fill_empty_buckets = !app_matches.is_present("no-fill");
     let tolerant = app_matches.is_present("tolerant");
-    let order = if app_matches.is_present("descending") { DateTimeOrder::Descending } else { DateTimeOrder::Ascending };
-    let mode = if app_matches.is_present("stream") { Mode::Stream } else { Mode::Normal };
+    let order = if app_matches.is_present("descending") {
+        DateTimeOrder::Descending
+    } else {
+        DateTimeOrder::Ascending
+    };
+    let mode = if app_matches.is_present("stream") {
+        Mode::Stream
+    } else {
+        Mode::Normal
+    };
 
     Args {
         datetime_format,
@@ -213,13 +220,13 @@ struct Args {
     fill_empty_buckets: bool,
     mode: Mode,
     order: DateTimeOrder,
-    tolerant: bool
+    tolerant: bool,
 }
 
 #[derive(Debug, Copy, Clone)]
 enum Mode {
     Normal,
-    Stream
+    Stream,
 }
 
 // Mode-based runner. Contains business logic for normal and streaming modes.
@@ -227,24 +234,21 @@ enum Runner {
     // Normal mode will put everything into buckets and print them all at the end.
     Normal {
         // Unordered buckets - will be ordered after all lines have been counted.
-        buckets: HashMap<DateTime<Utc>, u64>
+        buckets: HashMap<DateTime<Utc>, u64>,
     },
     Stream {
         count: u64,
-        bucket: Option<DateTime<Utc>>
-    }
+        bucket: Option<DateTime<Utc>>,
+    },
 }
 
 impl Runner {
     fn from_mode(mode: Mode) -> Self {
         match mode {
             Mode::Normal => Runner::Normal {
-                buckets: HashMap::with_capacity(1024)
+                buckets: HashMap::with_capacity(1024),
             },
-            Mode::Stream => Runner::Stream {
-                count: 0,
-                bucket: None
-            }
+            Mode::Stream => Runner::Stream { count: 0, bucket: None },
         }
     }
 
@@ -253,7 +257,7 @@ impl Runner {
             Runner::Normal { buckets } => {
                 *buckets.entry(entry).or_insert(0) += 1;
                 Ok(())
-            },
+            }
             Runner::Stream { count, bucket } => {
                 let current_bucket = match bucket {
                     Some(b) => b,
@@ -270,14 +274,14 @@ impl Runner {
                     (_, Ordering::Equal) => {
                         // Same bucket. Just increment the count.
                         *count += 1;
-                    },
+                    }
                     (DateTimeOrder::Ascending, Ordering::Less) | (DateTimeOrder::Descending, Ordering::Greater) => {
                         // Non-monotonic according to configured ordering.
                         if !args.tolerant {
                             // TODO: better error propagation.
                             panic!("Non monotonic entry found");
                         }
-                    },
+                    }
                     (DateTimeOrder::Ascending, Ordering::Greater) | (DateTimeOrder::Descending, Ordering::Less) => {
                         // Monotonic. Print bucket(s) and advance to the next. We may be printing multiple buckets at
                         // once so lock stdout.
@@ -293,7 +297,7 @@ impl Runner {
                         }
                         *count = 1;
                         *bucket = Some(entry)
-                    },
+                    }
                 }
                 Ok(())
             }
@@ -307,7 +311,7 @@ impl Runner {
                 let mut ordered_buckets: Vec<(DateTime<Utc>, u64)> = buckets.into_iter().collect();
                 match args.order {
                     DateTimeOrder::Ascending => ordered_buckets.sort_unstable_by(|l, r| l.0.cmp(&r.0)),
-                    DateTimeOrder::Descending => ordered_buckets.sort_unstable_by(|l, r| r.0.cmp(&l.0))
+                    DateTimeOrder::Descending => ordered_buckets.sort_unstable_by(|l, r| r.0.cmp(&l.0)),
                 };
 
                 // Write output to stdout.
@@ -325,7 +329,7 @@ impl Runner {
                     writeln!(stdout_lock, "{},{}", bucket, count)?;
                     prev_bucket = args.granularity.successor(bucket);
                 }
-            },
+            }
             Runner::Stream { count, bucket } => {
                 if let Some(bucket) = bucket {
                     // Don't bother locking stdout for a single write.
@@ -342,7 +346,7 @@ impl Runner {
 #[derive(Debug, Copy, Clone)]
 enum DateTimeOrder {
     Ascending,
-    Descending
+    Descending,
 }
 
 // Where the program can take its input from.
@@ -386,9 +390,7 @@ impl DateTimeFormat {
         let chrono_items: Vec<FormatItem> = StrftimeItems::new(format_string)
             .inspect(|item| {
                 items_supported &= match item {
-                    Item::Numeric(numeric, pad) => {
-                        numeric_format_to_regex_fragment(numeric, *pad).is_some()
-                    }
+                    Item::Numeric(numeric, pad) => numeric_format_to_regex_fragment(numeric, *pad).is_some(),
                     Item::Fixed(fixed) => fixed_format_to_regex_fragment(fixed).is_some(),
                     _ => true,
                 }
@@ -440,11 +442,7 @@ impl DateTimeFormat {
     // 'full' DateTimes - just accept 0s for missing components?
     fn try_parse(&self, text: &str) -> chrono::format::ParseResult<DateTime<Utc>> {
         let mut parsed = Parsed::new();
-        chrono::format::parse(
-            &mut parsed,
-            text,
-            self.chrono_items.iter().map(FormatItem::to_chrono),
-        )?;
+        chrono::format::parse(&mut parsed, text, self.chrono_items.iter().map(FormatItem::to_chrono))?;
         parsed.to_datetime_with_timezone(&Utc {})
     }
 
@@ -466,8 +464,7 @@ impl DateTimeFormat {
                 }
                 FormatItem::Fixed(fixed) => {
                     default_values.push_str(
-                        fixed_format_to_default_value(fixed)
-                            .expect("validator should have rejected unsupported items"),
+                        fixed_format_to_default_value(fixed).expect("validator should have rejected unsupported items"),
                     );
                 }
             }
@@ -535,15 +532,12 @@ mod datetime_format_tests {
             ("%Y", vec!["2019", "1", "0100", "100", "-1"]),
             (
                 "%m",
-                vec![
-                    "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12",
-                ],
+                vec!["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"],
             ),
             (
                 "%b",
                 vec![
-                    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov",
-                    "Dec",
+                    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
                 ],
             ),
             (
@@ -595,16 +589,7 @@ mod datetime_format_tests {
     #[test]
     fn parses() {
         let cases = vec![
-            (
-                "%Y-%m-%d %H:%M:%S",
-                "1991-08-10 01:02:03",
-                1991,
-                8,
-                10,
-                1,
-                2,
-                3,
-            ),
+            ("%Y-%m-%d %H:%M:%S", "1991-08-10 01:02:03", 1991, 8, 10, 1, 2, 3),
             (
                 "%b %d, %Y %I:%M:%S%P",
                 "Mar 14, 2019 04:59:34pm",
@@ -679,9 +664,7 @@ impl Granularity {
             Granularity::Minute(m) => {
                 let m = m.get();
                 let time = datetime.time();
-                datetime
-                    .date()
-                    .and_hms(time.hour(), time.minute() / m * m, 0)
+                datetime.date().and_hms(time.hour(), time.minute() / m * m, 0)
             }
             Granularity::Hour(h) => {
                 let h = h.get();
@@ -735,12 +718,8 @@ mod granularity_tests {
         for granularity_seconds in 1..100 {
             let granularity = Granularity::Second(NonZeroU32::new(granularity_seconds).unwrap());
             for input_second in 0..60 {
-                let expected_bucket_second =
-                    input_second / granularity_seconds * granularity_seconds;
-                let input = DateTime::from_utc(
-                    NaiveDate::from_ymd(1991, 8, 10).and_hms(10, 30, input_second),
-                    Utc {},
-                );
+                let expected_bucket_second = input_second / granularity_seconds * granularity_seconds;
+                let input = DateTime::from_utc(NaiveDate::from_ymd(1991, 8, 10).and_hms(10, 30, input_second), Utc {});
                 let bucket = granularity.bucketize(&input);
                 assert!(bucket.time().second() % granularity_seconds == 0);
                 assert_eq!(expected_bucket_second, bucket.time().second());
@@ -750,12 +729,8 @@ mod granularity_tests {
         for granularity_minutes in 1..100 {
             let granularity = Granularity::Minute(NonZeroU32::new(granularity_minutes).unwrap());
             for input_minute in 0..60 {
-                let expected_bucket_minute =
-                    input_minute / granularity_minutes * granularity_minutes;
-                let input = DateTime::from_utc(
-                    NaiveDate::from_ymd(1991, 8, 10).and_hms(10, input_minute, 15),
-                    Utc {},
-                );
+                let expected_bucket_minute = input_minute / granularity_minutes * granularity_minutes;
+                let input = DateTime::from_utc(NaiveDate::from_ymd(1991, 8, 10).and_hms(10, input_minute, 15), Utc {});
                 let bucket = granularity.bucketize(&input);
                 assert!(bucket.time().minute() % granularity_minutes == 0);
                 assert_eq!(expected_bucket_minute, bucket.time().minute());
@@ -767,10 +742,7 @@ mod granularity_tests {
             let granularity = Granularity::Hour(NonZeroU32::new(granularity_hours).unwrap());
             for input_hour in 0..24 {
                 let expected_bucket_hour = input_hour / granularity_hours * granularity_hours;
-                let input = DateTime::from_utc(
-                    NaiveDate::from_ymd(1991, 8, 10).and_hms(input_hour, 43, 15),
-                    Utc {},
-                );
+                let input = DateTime::from_utc(NaiveDate::from_ymd(1991, 8, 10).and_hms(input_hour, 43, 15), Utc {});
                 let bucket = granularity.bucketize(&input);
                 assert!(bucket.time().hour() % granularity_hours == 0);
                 assert_eq!(expected_bucket_hour, bucket.time().hour());
