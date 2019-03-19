@@ -237,7 +237,10 @@ enum Runner {
         buckets: HashMap<DateTime<Utc>, u64>,
     },
     Stream {
+        // How many entries have been seen for the current bucket.
         count: u64,
+        // Current bucket. None only at the runner's beginning, when no bucket
+        // has been encountered yet, and then Some from then on.
         bucket: Option<DateTime<Utc>>,
     },
 }
